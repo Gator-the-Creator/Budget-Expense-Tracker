@@ -267,7 +267,9 @@ const SideLegend = memo(({ data, colors, total, theme, isDonut = false }) => {
                         <div className="flex items-center gap-1.5 sm:gap-2">
                             <div 
                                 className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full flex-shrink-0`} 
+                                {% raw %}
                                 style={{ backgroundColor: isDonut ? 'transparent' : color, border: isDonut ? `2px solid ${color}` : 'none' }} 
+                                {% endraw %}
                             />
                             <span className="text-[8px] sm:text-[9px] font-black uppercase opacity-60 truncate w-full">{entry.name}</span>
                         </div>
