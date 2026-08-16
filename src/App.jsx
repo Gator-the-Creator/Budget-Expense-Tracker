@@ -45,6 +45,19 @@ const getWeekDays = (startDate, startsOnSunday) => {
   return days;
 };
 
+const getMonthDays = (date) => {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  
+  const days = [];
+  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+  
+  return days;
+};
+
 const DEFAULT_COLOR_SCHEME = {
   primary: '#4c9aff',
   secondary: '#34d399',
@@ -248,10 +261,8 @@ const FinancialDashboard = memo(({ focusDate, budgetData, limitData, onSave, onS
   const [scope, setScope] = useState('month'); 
   const [activeIndex, setActiveIndex] = useState(-1);
   const [activeIncomeIndex, setActiveIncomeIndex] = useState(-1);
-  const [expandedRow, setExpandedRow] = useState(null);
   
   const lastAddedId = useRef(null);
-  const lastAddedSubId = useRef(null);
 
   const rangeTitle = useMemo(() => {
       if (scope === 'year') return `Yearly Breakdown ${focusDate.getFullYear()}`;
@@ -326,14 +337,6 @@ const FinancialDashboard = memo(({ focusDate, budgetData, limitData, onSave, onS
     const newId = crypto.randomUUID();
     lastAddedId.current = newId;
     onSave([...budgetData, { id: newId, category: '', subItems: [], amount: 0, type: 'Expense', date: formatToDateKey(focusDate) }]);
-  };
-
-  const addSubItem = (parentId) => {
-    const subId = crypto.randomUUID();
-    lastAddedSubId.current = subId;
-    const parent = budgetData.find(i => i.id === parentId);
-    const newSubs = [...(parent.subItems || []), { id: subId, name: '', amount: 0 }];
-    updateItem(parentId, 'subItems', newSubs);
   };
 
   useEffect(() => {
@@ -480,10 +483,29 @@ const FinancialDashboard = memo(({ focusDate, budgetData, limitData, onSave, onS
   );
 });
 
+const PlannerViewSelector = memo(({ viewMode, setViewMode, focusDate, setFocusDate, weekStartsOn }) => {
+  return (
+    <div className="flex items-center gap-4 no-print">
+      <div className="flex gap-2 bg-gray-200 dark:bg-gray-800 p-1 rounded-xl">
+        {['week', 'month', 'year'].map(mode => (
+          <button 
+            key={mode} 
+            onClick={() => setViewMode(mode)}
+            className={`px-4 py-2 rounded-lg text-sm font-black uppercase transition-all ${viewMode === mode ? 'bg-blue-600 text-white shadow-lg' : 'opacity-50 hover:opacity-100'}`}
+          >
+            {mode}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+});
+
 const App = () => {
   const [activeTab, setActiveTab] = useState('planner');
   const [focusDate, setFocusDate] = useState(new Date());
-  const [weekStartsOn, setWeekStartsOn] = useState('monday');
+  const [weekStartsOn, setWeekStartsOn] = useState('sunday');
+  const [viewMode, setViewMode] = useState('week'); // week, month, year
 
   const [plannerCache, setPlannerCache] = useState(() => {
     const saved = localStorage.getItem('planner_cache');
@@ -540,7 +562,22 @@ const App = () => {
     setLimitData(data);
   }, []);
 
-  const currentWeekDays = useMemo(() => getWeekDays(focusDate, weekStartsOn === 'sunday'), [focusDate, weekStartsOn]);
+  // Get days to display based on view mode
+  const daysToDisplay = useMemo(() => {
+    if (viewMode === 'week') {
+      return getWeekDays(focusDate, weekStartsOn === 'sunday');
+    } else if (viewMode === 'month') {
+      return getMonthDays(focusDate).filter(d => d !== null);
+    } else { // year
+      const allDays = [];
+      for (let i = 0; i < 12; i++) {
+        const monthDate = new Date(focusDate.getFullYear(), focusDate.getMonth() + i, 1);
+        const monthDays = getMonthDays(monthDate).filter(d => d !== null);
+        allDays.push(...monthDays);
+      }
+      return allDays;
+    }
+  }, [focusDate, viewMode, weekStartsOn]);
 
   const handlePrint = () => {
     window.print();
@@ -555,11 +592,6 @@ const App = () => {
             .print-only { display: block !important; }
             aside { display: none !important; }
             main { width: 100% !important; grid-column: span 12 / span 12 !important; }
-            .grid { display: block !important; }
-            .rounded-2xl, .rounded-3xl, .rounded-[40px] { border-radius: 0 !important; border: 1px solid #ddd !important; box-shadow: none !important; margin-bottom: 20px !important; break-inside: avoid; }
-            .h-[480px], .h-[450px] { height: auto !important; min-height: 0 !important; }
-            .overflow-hidden { overflow: visible !important; }
-            input, select, textarea { border: none !important; background: transparent !important; color: black !important; }
         }
       `}</style>
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8">
@@ -584,26 +616,45 @@ const App = () => {
           <div className={`${theme.cardBg} p-6 rounded-[32px] shadow-xl space-y-4 border-2 ${theme.border}`}>
              <h3 className="font-black uppercase text-[10px] opacity-30 tracking-widest">Configuration</h3>
              <div className="flex justify-between items-center"><span className="text-xs font-black uppercase">Dark Mode</span><button onClick={() => setDarkMode(!darkMode)} className={`w-12 h-6 rounded-full transition-colors relative ${darkMode ? 'bg-blue-600' : 'bg-gray-300'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-md transition-all ${darkMode ? 'left-7' : 'left-1'}`} /></button></div>
-             <div className="flex justify-between items-center"><span className="text-xs font-black uppercase">Start Day</span><select value={weekStartsOn} onChange={(e) => setWeekStartsOn(e.target.value)} className={`text-[10px] p-1 rounded font-black outline-none ${theme.inputBg} uppercase`}><option value="monday">Mon</option><option value="sunday">Sun</option></select></div>
+             <div className="flex justify-between items-center"><span className="text-xs font-black uppercase">Start Day</span><select value={weekStartsOn} onChange={(e) => setWeekStartsOn(e.target.value)} className={`text-[10px] p-1 rounded font-black outline-none ${theme.inputBg} uppercase`}><option value="sunday">Sun</option><option value="monday">Mon</option></select></div>
           </div>
         </aside>
 
         <main className="lg:col-span-9 space-y-8">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => { const d = new Date(focusDate); d.setMonth(d.getMonth() - 1); setFocusDate(d); }} className={`p-3 rounded-2xl ${theme.cardBg} border-2 ${theme.border} shadow-md hover:scale-110 active:scale-95 transition-all no-print`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" /></svg></button>
-                    <h2 className="text-2xl font-black tracking-tighter uppercase">{focusDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}</h2>
-                    <button onClick={() => { const d = new Date(focusDate); d.setMonth(d.getMonth() + 1); setFocusDate(d); }} className={`p-3 rounded-2xl ${theme.cardBg} border-2 ${theme.border} shadow-md hover:scale-110 active:scale-95 transition-all no-print`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg></button>
+                    <button onClick={() => { const d = new Date(focusDate); 
+                      if (viewMode === 'week') d.setDate(d.getDate() - 7);
+                      else if (viewMode === 'month') d.setMonth(d.getMonth() - 1);
+                      else d.setFullYear(d.getFullYear() - 1);
+                      setFocusDate(d); 
+                    }} className={`p-3 rounded-2xl ${theme.cardBg} border-2 ${theme.border} shadow-md hover:scale-110 active:scale-95 transition-all no-print`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" /></svg></button>
+                    <h2 className="text-2xl font-black tracking-tighter uppercase">
+                      {viewMode === 'week' && focusDate.toLocaleString('en-US', { month: 'short', day: 'numeric' })}
+                      {viewMode === 'month' && focusDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+                      {viewMode === 'year' && focusDate.getFullYear()}
+                    </h2>
+                    <button onClick={() => { const d = new Date(focusDate); 
+                      if (viewMode === 'week') d.setDate(d.getDate() + 7);
+                      else if (viewMode === 'month') d.setMonth(d.getMonth() + 1);
+                      else d.setFullYear(d.getFullYear() + 1);
+                      setFocusDate(d); 
+                    }} className={`p-3 rounded-2xl ${theme.cardBg} border-2 ${theme.border} shadow-md hover:scale-110 active:scale-95 transition-all no-print`}><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg></button>
                 </div>
-                <button onClick={handlePrint} className="px-5 py-3 bg-gray-900 text-white rounded-2xl text-[10px] font-black shadow-lg hover:bg-black transition-all uppercase tracking-widest no-print flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Export PDF
-                </button>
+                <div className="flex gap-4 items-center">
+                  {activeTab === 'planner' && (
+                    <PlannerViewSelector viewMode={viewMode} setViewMode={setViewMode} focusDate={focusDate} setFocusDate={setFocusDate} weekStartsOn={weekStartsOn} />
+                  )}
+                  <button onClick={handlePrint} className="px-5 py-3 bg-gray-900 text-white rounded-2xl text-[10px] font-black shadow-lg hover:bg-black transition-all uppercase tracking-widest no-print flex items-center gap-2">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                      Export PDF
+                  </button>
+                </div>
             </div>
 
             {activeTab === 'planner' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 auto-rows-min items-start">
-                    {currentWeekDays.map(day => (
+                <div className={`grid gap-6 auto-rows-min items-start ${viewMode === 'week' ? 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3' : 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'}`}>
+                    {daysToDisplay.map(day => (
                       <DailyPlannerCard key={formatToDateKey(day)} date={day} dayData={plannerCache[formatToDateKey(day)] || { sections: [createNewSection()], customColor: theme.primary, bgPreset: 'none', summary: '' }} savePlannerData={savePlannerData} theme={theme} darkMode={darkMode} />
                     ))}
                 </div>
