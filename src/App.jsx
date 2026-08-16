@@ -141,12 +141,24 @@ const DailyPlannerCard = memo(({ date, dayData, savePlannerData, theme, darkMode
   const bgStyle = useMemo(() => {
     const preset = BG_PRESETS.find(p => p.id === dayData.bgPreset);
     if (!preset || preset.id === 'none') return {};
-    if (preset.url.startsWith('linear')) return { background: preset.url };
+    if (preset.url.startsWith('linear')) {
+      if (dayData.bgPreset === 'grad1') {
+        const start = dayData.gradientStart || '#667eea';
+        const end = dayData.gradientEnd || '#764ba2';
+        return { background: `linear-gradient(135deg, ${start} 0%, ${end} 100%)` };
+      }
+      if (dayData.bgPreset === 'grad2') {
+        const start = dayData.gradientStart || '#00c6fb';
+        const end = dayData.gradientEnd || '#005bea';
+        return { background: `linear-gradient(to top, ${start} 0%, ${end} 100%)` };
+      }
+      return { background: preset.url };
+    }
     return { 
       backgroundImage: `linear-gradient(rgba(0,0,0,${darkMode ? 0.7 : 0.2}), rgba(0,0,0,${darkMode ? 0.7 : 0.2})), url(${preset.url})`,
       backgroundSize: 'cover', backgroundPosition: 'center'
     };
-  }, [dayData.bgPreset, darkMode]);
+  }, [dayData.bgPreset, dayData.gradientStart, dayData.gradientEnd, darkMode]);
 
   return (
     <div className={`rounded-2xl shadow-xl flex flex-col min-h-[480px] overflow-hidden border-t-8 border-x border-b ${darkMode ? 'border-white/10' : 'border-black/10 bg-white'}`} style={{ ...bgStyle, borderTopColor: dayData.customColor || theme.primary }}>
@@ -160,7 +172,13 @@ const DailyPlannerCard = memo(({ date, dayData, savePlannerData, theme, darkMode
             <select value={dayData.bgPreset} onChange={(e) => updateDay('bgPreset', e.target.value)} className="text-[10px] bg-white/20 rounded font-black py-1">
               {BG_PRESETS.map(p => <option key={p.id} value={p.id} className="text-black">{p.name}</option>)}
             </select>
-            <input type="color" value={dayData.customColor || theme.primary} onChange={(e) => updateDay('customColor', e.target.value)} className="w-5 h-5 rounded-full border-none p-0 cursor-pointer" />
+            {(dayData.bgPreset === 'grad1' || dayData.bgPreset === 'grad2') && (
+              <>
+                <input type="color" title="Gradient Start Color" value={dayData.gradientStart || (dayData.bgPreset === 'grad1' ? '#667eea' : '#00c6fb')} onChange={(e) => updateDay('gradientStart', e.target.value)} className="w-5 h-5 rounded-full border-none p-0 cursor-pointer" />
+                <input type="color" title="Gradient End Color" value={dayData.gradientEnd || (dayData.bgPreset === 'grad1' ? '#764ba2' : '#005bea')} onChange={(e) => updateDay('gradientEnd', e.target.value)} className="w-5 h-5 rounded-full border-none p-0 cursor-pointer" />
+              </>
+            )}
+            <input type="color" title="Day Color" value={dayData.customColor || theme.primary} onChange={(e) => updateDay('customColor', e.target.value)} className="w-5 h-5 rounded-full border-none p-0 cursor-pointer" />
           </div>
         </div>
         <div className="mt-2">
@@ -222,9 +240,11 @@ const CalendarView = memo(({ focusDate, setFocusDate, setActiveTab, weekStartsOn
                       className={`relative aspect-square rounded-xl sm:rounded-2xl p-1 flex flex-col items-center transition-all hover:scale-105 border-2 overflow-hidden 
                         ${isSelected ? 'border-blue-500 z-10 shadow-lg scale-105' : 'border-transparent'} ${theme.inputBg}`}
                   >
+                      {dayColor && <div className="absolute top-0 left-0 right-0 h-1.5 sm:h-2 pointer-events-none" style={{ backgroundColor: dayColor }} />}
+                      {dayColor && <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundColor: dayColor }} />}
                       <span className={`text-xs sm:text-sm font-black mb-1 ${hasNotes ? 'text-blue-600' : ''}`}>{day.getDate()}</span>
                       {summary && <div className="w-full px-0.5"><p className="text-[6px] sm:text-[7px] leading-[1.1] font-black uppercase text-center break-words line-clamp-2" style={{ color: dayColor || '#3b82f6' }}>{summary}</p></div>}
-                      {hasNotes && !summary && <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full mt-0.5" style={{ backgroundColor: dayColor || '#3b82f6' }} />}
+                      {hasNotes && !summary && <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full mt-0.5" style={{ backgroundColor: dayColor || '#3b82f6' }} />}
                   </button>
               );
           })}
@@ -469,7 +489,9 @@ const FinancialDashboard = memo(({ focusDate, budgetData, limitData, onSave, onS
               {filteredData.map(item => (
                 <tr key={item.id} className="hover:bg-black/5 transition-colors group">
                   <td className="p-4"><input id={`input-group-${item.id}`} className="bg-transparent font-black outline-none w-full border-b-2 border-transparent focus:border-blue-600" value={item.category || ''} placeholder="Ex: Food" onChange={e => updateItem(item.id, 'category', e.target.value)} /></td>
-                  <td className="p-4 font-black text-blue-600">${(item.amount || 0).toFixed(2)}</td>
+                  <td className="p-4 font-black text-blue-600">
+                    <div className="flex items-center gap-1">$<input type="number" onFocus={handleInputFocus} className="bg-transparent outline-none w-20 font-black" value={item.amount ?? 0} onChange={e => updateItem(item.id, 'amount', Number(e.target.value))} /></div>
+                  </td>
                   <td className="p-4"><select className="bg-transparent font-black text-[10px] uppercase outline-none cursor-pointer p-1 rounded-lg border-2 border-black/5" value={item.type} onChange={e => updateItem(item.id, 'type', e.target.value)}><option value="Expense">Expense</option><option value="Income">Income</option></select></td>
                   <td className="p-4"><input type="date" value={item.date || formatToDateKey(new Date())} onChange={(e) => updateItem(item.id, 'date', e.target.value)} className="bg-transparent font-black text-[10px] uppercase outline-none" /></td>
                   <td className="p-4 text-right no-print"><button onClick={() => onSave(budgetData.filter(i => i.id !== item.id))} className="text-red-500 opacity-0 group-hover:opacity-100 transition-all hover:scale-125"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button></td>
