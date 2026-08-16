@@ -30,12 +30,10 @@ export default function App() {
   const [showBudgetForm, setShowBudgetForm] = useState(false);
   const [budgetFormData, setBudgetFormData] = useState({ category: 'Food', amount: '' });
 
-  // Save expenses to localStorage
   useEffect(() => {
     localStorage.setItem('expenses', JSON.stringify(expenses));
   }, [expenses]);
 
-  // Save budgets to localStorage
   useEffect(() => {
     localStorage.setItem('budgets', JSON.stringify(budgets));
   }, [budgets]);
